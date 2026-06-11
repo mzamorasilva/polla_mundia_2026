@@ -1,1 +1,1 @@
-# polla_mundia_2026
+# polla_mundial_2026

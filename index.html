@@ -468,6 +468,7 @@ tbody tr:hover td{background:var(--vd4)}
   display:flex;gap:8px;align-items:flex-start;
 }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
 
@@ -1482,6 +1483,264 @@ function cerrarConfirm() {
   window._pendingReg = null;
 }
 
+
+// ═══════════════════════════════════════════════════════════
+// GENERACIÓN DE PDF DE COMPROBANTE
+// ═══════════════════════════════════════════════════════════
+function generarPDF(data, participanteId) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+  const W = 210, M = 14; // ancho A4, margen
+  let y = 0;
+
+  // ── Paleta de colores ───────────────────────────────────
+  const VERDE   = [46, 125, 82];
+  const VERDE_L = [212, 237, 218];
+  const DORADO  = [200, 134, 10];
+  const GRIS_L  = [245, 247, 245];
+  const GRIS_M  = [180, 190, 182];
+  const BLANCO  = [255, 255, 255];
+  const OSCURO  = [26, 46, 32];
+
+  // ── Helpers ─────────────────────────────────────────────
+  function setFont(style, size, color) {
+    doc.setFont('helvetica', style);
+    doc.setFontSize(size);
+    doc.setTextColor(...(color || OSCURO));
+  }
+  function fillRect(x, y, w, h, color) {
+    doc.setFillColor(...color);
+    doc.roundedRect(x, y, w, h, 1.5, 1.5, 'F');
+  }
+  function line(y, color) {
+    doc.setDrawColor(...(color || GRIS_M));
+    doc.setLineWidth(0.3);
+    doc.line(M, y, W - M, y);
+  }
+
+  // ── ENCABEZADO ──────────────────────────────────────────
+  // Banner verde
+  doc.setFillColor(...VERDE);
+  doc.rect(0, 0, W, 38, 'F');
+
+  // Trofeo SVG simplificado como texto
+  setFont('bold', 22, BLANCO);
+  doc.text('⚽', M, 20);
+
+  setFont('bold', 16, BLANCO);
+  doc.text('POLLA MUNDIAL 2026', M + 12, 16);
+  setFont('normal', 9, [200, 230, 210]);
+  doc.text('Comprobante de Inscripción', M + 12, 22);
+  doc.text('USA · México · Canadá · 11 Jun – 19 Jul 2026', M + 12, 28);
+
+  // Badge ID
+  doc.setFillColor(...DORADO);
+  doc.roundedRect(W - 60, 8, 46, 22, 3, 3, 'F');
+  setFont('bold', 7, OSCURO);
+  doc.text('ID PARTICIPANTE', W - 57, 15);
+  setFont('bold', 9, OSCURO);
+  doc.text(participanteId, W - 57, 22);
+
+  y = 46;
+
+  // ── DATOS DEL PARTICIPANTE ──────────────────────────────
+  fillRect(M, y, W - M*2, 28, GRIS_L);
+  setFont('bold', 8, VERDE);
+  doc.text('DATOS DEL PARTICIPANTE', M + 4, y + 7);
+
+  setFont('bold', 11, OSCURO);
+  doc.text(data.nombre, M + 4, y + 15);
+  setFont('normal', 8, [80, 120, 90]);
+  doc.text(data.email, M + 4, y + 21);
+  if (data.goleador) {
+    doc.setFillColor(...DORADO);
+    doc.roundedRect(W - 75, y + 10, 61, 10, 2, 2, 'F');
+    setFont('bold', 7, OSCURO);
+    doc.text('⭐ GOLEADOR PREDICHO', W - 72, y + 16);
+    setFont('normal', 7, OSCURO);
+    doc.text(data.goleador, W - 72, y + 22);
+  }
+
+  // Fecha
+  const fecha = new Date().toLocaleString('es-PE', {
+    day: '2-digit', month: 'long', year: 'numeric',
+    hour: '2-digit', minute: '2-digit'
+  });
+  setFont('normal', 7, GRIS_M);
+  doc.text('Registrado: ' + fecha, M + 4, y + 26);
+
+  y += 34;
+
+  // ── CLASIFICADOS PREDICHOS ──────────────────────────────
+  const grupos = {};
+  (data.grupos || []).forEach(g => { grupos[g.grupo] = g; });
+
+  if (Object.keys(grupos).length) {
+    setFont('bold', 9, VERDE);
+    doc.text('CLASIFICADOS PREDICHOS POR GRUPO', M, y);
+    setFont('normal', 7, GRIS_M);
+    doc.text('(puntos: 9 si aciertas 1° y 2° · 3 solo el 1° · 2 solo el 2°)', M + 56, y);
+    y += 5;
+
+    const gks = Object.keys(grupos).sort();
+    const cols = 3;
+    const cellW = (W - M * 2) / cols;
+    const cellH = 13;
+
+    gks.forEach((g, i) => {
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      const cx = M + col * cellW;
+      const cy = y + row * (cellH + 2);
+
+      fillRect(cx, cy, cellW - 2, cellH, col % 2 === 0 ? GRIS_L : BLANCO);
+      doc.setDrawColor(...VERDE_L);
+      doc.setLineWidth(0.4);
+      doc.roundedRect(cx, cy, cellW - 2, cellH, 1.5, 1.5, 'S');
+
+      setFont('bold', 7, VERDE);
+      doc.text(`GRUPO ${g}`, cx + 2, cy + 5);
+
+      const gd = grupos[g];
+      setFont('bold', 7, OSCURO);
+      doc.text(`🥇 ${gd.primero || '—'}`, cx + 2, cy + 9.5);
+      setFont('normal', 6.5, [80, 120, 90]);
+      doc.text(`🥈 ${gd.segundo || '—'}`, cx + 2, cy + 13);
+    });
+
+    y += Math.ceil(gks.length / cols) * (cellH + 2) + 6;
+  }
+
+  // ── PREDICCIONES POR PARTIDO ────────────────────────────
+  const GRUPOS_NAMES = {
+    'A':['México','Sudáfrica','Corea del Sur','República Checa'],
+    'B':['Canadá','Bosnia y Herzegovina','Qatar','Suiza'],
+    'C':['Brasil','Marruecos','Haití','Escocia'],
+    'D':['Estados Unidos','Paraguay','Australia','Turquía'],
+    'E':['Alemania','Curazao','Costa de Marfil','Ecuador'],
+    'F':['Países Bajos','Japón','Suecia','Túnez'],
+    'G':['Bélgica','Egipto','Irán','Nueva Zelanda'],
+    'H':['España','Cabo Verde','Arabia Saudita','Uruguay'],
+    'I':['Francia','Senegal','Irak','Noruega'],
+    'J':['Argentina','Argelia','Austria','Jordania'],
+    'K':['Portugal','RD Congo','Uzbekistán','Colombia'],
+    'L':['Inglaterra','Croacia','Ghana','Panamá'],
+  };
+
+  // Mapa de partido → equipos desde FIXTURE global
+  const partidoMap = {};
+  if (typeof FIXTURE !== 'undefined') {
+    FIXTURE.forEach(f => {
+      partidoMap[f[0]] = { grupo: f[1], local: f[2], visitante: f[3] };
+    });
+  }
+
+  setFont('bold', 9, VERDE);
+  doc.text('PREDICCIONES DE PARTIDOS', M, y);
+  setFont('normal', 7, GRIS_M);
+  doc.text(`(${data.predicciones.length} partidos registrados)`, M + 52, y);
+  y += 5;
+
+  // Agrupar predicciones por grupo
+  const predByGrupo = {};
+  data.predicciones.forEach(p => {
+    const info = partidoMap[p.partidoId];
+    const g = info ? info.grupo : '?';
+    if (!predByGrupo[g]) predByGrupo[g] = [];
+    predByGrupo[g].push({ ...p, local: info?.local || '?', visitante: info?.visitante || '?' });
+  });
+
+  const colW = (W - M * 2 - 4) / 2;
+  let colLeft = true;
+  let xPos = M;
+  let yLeft = y, yRight = y;
+
+  Object.keys(predByGrupo).sort().forEach(g => {
+    const preds = predByGrupo[g];
+    const blockH = 6 + preds.length * 5.5 + 3;
+
+    // Si no cabe en la página, nueva página
+    const yUse = colLeft ? yLeft : yRight;
+    if (yUse + blockH > 280) {
+      doc.addPage();
+      y = 15; yLeft = 15; yRight = 15; colLeft = true; xPos = M;
+    }
+
+    const cx = colLeft ? M : M + colW + 4;
+    const cy = colLeft ? yLeft : yRight;
+
+    // Header del grupo
+    doc.setFillColor(...VERDE);
+    doc.roundedRect(cx, cy, colW, 6, 1, 1, 'F');
+    setFont('bold', 7, BLANCO);
+    doc.text(`GRUPO ${g}`, cx + 2, cy + 4.3);
+
+    // Partidos
+    preds.forEach((p, pi) => {
+      const py = cy + 6 + pi * 5.5;
+      fillRect(cx, py, colW, 5, pi % 2 === 0 ? GRIS_L : BLANCO);
+
+      // Truncar nombres largos
+      const maxLen = 14;
+      const loc = p.local.length > maxLen ? p.local.substring(0, maxLen) + '…' : p.local;
+      const vis = p.visitante.length > maxLen ? p.visitante.substring(0, maxLen) + '…' : p.visitante;
+
+      setFont('normal', 6.5, OSCURO);
+      doc.text(loc, cx + 2, py + 3.5);
+      doc.text(vis, cx + colW - 22, py + 3.5, { align: 'right' });
+
+      // Marcador en badge
+      const score = `${p.golesLocal} - ${p.golesVisitante}`;
+      const scoreW = 14;
+      const sx = cx + colW / 2 - scoreW / 2;
+      doc.setFillColor(...VERDE_L);
+      doc.roundedRect(sx, py + 0.5, scoreW, 4, 1, 1, 'F');
+      setFont('bold', 7, VERDE);
+      doc.text(score, cx + colW / 2, py + 3.5, { align: 'center' });
+    });
+
+    const newY = cy + 6 + preds.length * 5.5 + 3;
+    if (colLeft) { yLeft = newY; }
+    else         { yRight = newY; }
+    colLeft = !colLeft;
+  });
+
+  y = Math.max(yLeft, yRight) + 8;
+
+  // ── PIE DE PÁGINA ───────────────────────────────────────
+  // Si el pie no cabe, nueva página
+  if (y > 270) { doc.addPage(); y = 20; }
+
+  line(y, VERDE_L);
+  y += 6;
+
+  doc.setFillColor(...VERDE_L);
+  doc.roundedRect(M, y, W - M * 2, 18, 2, 2, 'F');
+  setFont('bold', 7.5, VERDE);
+  doc.text('⚠️  IMPORTANTE', M + 4, y + 6);
+  setFont('normal', 7, [60, 100, 70]);
+  doc.text('Este documento es tu comprobante de inscripción. Guárdalo como respaldo.', M + 4, y + 11);
+  doc.text('Las predicciones no pueden modificarse una vez enviadas.', M + 4, y + 16);
+
+  y += 24;
+  setFont('normal', 7, GRIS_M);
+  doc.text('Polla Mundial 2026 · Generado automáticamente', M, y);
+  doc.text(fecha, W - M, y, { align: 'right' });
+
+  // ── NÚMEROS DE PÁGINA ────────────────────────────────────
+  const totalPages = doc.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    setFont('normal', 6.5, GRIS_M);
+    doc.text(`Página ${i} de ${totalPages}`, W / 2, 293, { align: 'center' });
+  }
+
+  // ── DESCARGAR ────────────────────────────────────────────
+  const filename = `polla2026_${data.nombre.replace(/\s+/g, '_').toLowerCase()}.pdf`;
+  doc.save(filename);
+}
+
 // ─── PASO 2: Confirmación → enviar realmente ──────────────
 async function enviarInscripcion() {
   const data = window._pendingReg;
@@ -1507,11 +1766,28 @@ async function enviarInscripcion() {
     document.querySelectorAll('#insGBody input, #iNom, #iMail, #iGol')
       .forEach(inp => { inp.disabled = true; inp.style.opacity = '.6'; });
 
-    showAlert(alertEl,'ok',
-      `🎉 ¡Inscripción exitosa, ${r.nombre}! ` +
+    // Generar y descargar PDF automáticamente
+    try {
+      generarPDF(data, r.participanteId);
+    } catch(pdfErr) {
+      console.warn('PDF error:', pdfErr);
+    }
+
+    // Mostrar alerta con botón de redownload por si acaso
+    const alertEl2 = document.getElementById('alertIns');
+    alertEl2.className = 'alert show a-ok';
+    alertEl2.innerHTML =
+      `🎉 <strong>¡Inscripción exitosa, ${r.nombre}!</strong> ` +
       `${data.predicciones.length} partidos guardados. ` +
-      `Recibirás confirmación por correo.`
-    );
+      `Tu PDF se descargó automáticamente. ` +
+      `<button onclick="generarPDF(window._lastReg, window._lastRegId)" ` +
+      `style="margin-left:8px;background:var(--vd);color:#fff;border:none;` +
+      `padding:3px 10px;border-radius:6px;cursor:pointer;font-size:.78rem">` +
+      `📄 Descargar PDF de nuevo</button>`;
+
+    // Guardar datos para redownload
+    window._lastReg   = data;
+    window._lastRegId = r.participanteId;
     sessionStorage.setItem('inscrito_' + data.email, '1');
   } catch(e) {
     cerrarConfirm();
@@ -2398,3 +2674,4 @@ window.addEventListener('load', () => {
 
 </body>
 </html>
+

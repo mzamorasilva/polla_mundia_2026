@@ -536,7 +536,7 @@ tbody tr:hover td{background:var(--vd4)}
         <div class="divider" style="margin:0"></div>
         <div style="display:flex;justify-content:space-between;align-items:center">
           <span style="color:var(--mt)">Inscripción</span>
-          <strong>S/ 100 por participante</strong>
+          <strong id="cfgMontoPart">S/ 100 por participante</strong>
         </div>
         <div class="divider" style="margin:0"></div>
         <div>
@@ -548,7 +548,7 @@ tbody tr:hover td{background:var(--vd4)}
             <div class="yape-info">
               <div class="tit">Yape a <strong id="cfgYapeNombre">Esmeling Cordova</strong></div>
               <div class="num" id="cfgYapeNum">+51 987 201 455</div>
-              <span class="monto">S/ 100 · Adjuntar voucher</span>
+              <span class="monto" id="cfgMontoInicio">S/ 100 · Adjuntar voucher</span>
             </div>
           </div>
         </div>
@@ -1183,11 +1183,12 @@ function go(id) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
   stopAuto();
   if (id === 'inicio')               loadHome();
-  if (id === 'inscripcion')          buildIns();
+  if (id === 'inscripcion')          { cargarConfig(); buildIns(); }
   if (id === 'tabla')                { loadTabla(); startAuto(); }
   if (id === 'partidos')             { loadPartidos(true); startAuto(); }
   if (id === 'predicciones_finales') loadPrediccionesFinales();
-  if (id === 'admin') { abrirAdmin(); return; }
+  if (id === 'reglas')               cargarConfig();
+  if (id === 'admin')                { abrirAdmin(); return; }
 }
 function startAuto() {
   stopAuto();
@@ -1203,7 +1204,7 @@ function stopAuto() { if (autoT) { clearInterval(autoT); autoT = null; } }
 // INICIO
 // ═══════════════════════════════════════════════════════════
 async function loadHome() {
-  cargarConfig(); // cargar config dinámica (monto, yape, plazo)
+  await cargarConfig(); // cargar config dinámica (monto, yape, plazo) — await para que se aplique antes
   try {
     const d = await api('getParticipantes');
     const n = d.participantes.length;
@@ -1943,7 +1944,10 @@ async function cargarConfig() {
     const d = await api('getConfig');
     CFG = d.config || {};
     aplicarConfigEnApp();
-  } catch(e) {}
+  } catch(e) {
+    // Si falla la API, aplicar con valores por defecto del CFG actual
+    aplicarConfigEnApp();
+  }
 }
 
 function aplicarConfigEnApp() {
@@ -1952,25 +1956,32 @@ function aplicarConfigEnApp() {
   const numYape     = CFG['YapeNumero']       || '+51 987 201 455';
   const fechaLimite = CFG['FechaLimite']      || '11 Jun · 2:00 PM';
 
-  // Inicio
-  const hPlazo = document.getElementById('hPlazo');
-  if (hPlazo) hPlazo.textContent = fechaLimite.split('·')[0].trim() || fechaLimite;
-  const hPlazoCard = document.getElementById('hPlazoCard');
-  if (hPlazoCard) hPlazoCard.textContent = fechaLimite;
-  const cfgYapeNombre = document.getElementById('cfgYapeNombre');
-  if (cfgYapeNombre) cfgYapeNombre.textContent = nombreYape;
-  const cfgYapeNum = document.getElementById('cfgYapeNum');
-  if (cfgYapeNum) cfgYapeNum.textContent = numYape;
-  const cfgMontoInicio = document.getElementById('cfgMontoInicio');
-  if (cfgMontoInicio) cfgMontoInicio.textContent = 'S/ ' + monto + ' · Adjuntar voucher';
+  // Actualizar todos los elementos dinámicos
+  const updates = {
+    // Inicio — hero stats
+    'hPlazo':          fechaLimite.split('·')[0].trim() || fechaLimite,
+    // Inicio — card Cómo participar
+    'hPlazoCard':      fechaLimite,
+    'cfgMontoPart':    'S/ ' + monto + ' por participante',
+    // Inicio — yape box
+    'cfgYapeNombre':   nombreYape,
+    'cfgYapeNum':      numYape,
+    'cfgMontoInicio':  'S/ ' + monto + ' · Adjuntar voucher',
+    // Inscripción — datos yape
+    'cfgMontoIns':     'S/ ' + monto,
+    'cfgYapeNomIns':   nombreYape,
+    'cfgYapeNumIns':   numYape,
+    // Reglas
+    'cfgPlazoReglas':  fechaLimite,
+    'cfgMontoReglas':  'S/ ' + monto,
+    'cfgYapeNomReglas': nombreYape,
+    'cfgYapeNumReglas': numYape,
+  };
 
-  // Inscripción
-  const cfgMontoIns = document.getElementById('cfgMontoIns');
-  if (cfgMontoIns) cfgMontoIns.textContent = 'S/ ' + monto;
-  const cfgYapeNomIns = document.getElementById('cfgYapeNomIns');
-  if (cfgYapeNomIns) cfgYapeNomIns.textContent = nombreYape;
-  const cfgYapeNumIns = document.getElementById('cfgYapeNumIns');
-  if (cfgYapeNumIns) cfgYapeNumIns.textContent = numYape;
+  Object.entries(updates).forEach(([id, val]) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = val;
+  });
 
   // Reglas
   const cfgPlazoReglas = document.getElementById('cfgPlazoReglas');
@@ -2019,7 +2030,9 @@ async function guardarConfigGeneral() {
     }
   }
   aplicarConfigEnApp();
-  showAlert(a, 'ok', `✅ ${guardados} parámetro(s) guardados. La app se actualizó.`);
+  // Re-aplicar también para secciones visibles
+  cargarConfig();
+  showAlert(a, 'ok', `✅ ${guardados} parámetro(s) guardados. La app se actualizó en todas las secciones.`);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -2675,5 +2688,3 @@ window.addEventListener('load', () => {
 
 </body>
 </html>
-
-
